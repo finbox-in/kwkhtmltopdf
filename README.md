@@ -31,8 +31,8 @@ the above server defined in the `KWKHTMLTOPDF_SERVER_URL` environment variable.
 
 There are two clients:
 
-* a go client (preferred)
-* a python client, which only depends on the `requests` library.
+- a go client (preferred)
+- a python client, which only depends on the `requests` library.
   It should work with any python version supported by `requests`.
 
 ## Quick start
@@ -94,7 +94,7 @@ as well as against the server using the python and go clients.
 
 ## Roadmap
 
-See [issues on GitHub](<https://github.com/acsone/kwkhtmltopdf/issues>)
+See [issues on GitHub](https://github.com/acsone/kwkhtmltopdf/issues)
 as well as some TODO's in the source code.
 
 ## Releasing
@@ -116,3 +116,19 @@ Contributors are visible on
 ## License
 
 MIT
+
+## Deploying
+
+### Login to ECR
+
+```sh
+$ aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 909798297030.dkr.ecr.ap-south-1.amazonaws.com
+```
+
+### Build and push to ECR
+
+```sh
+$ docker buildx build -f Dockerfile-0.12.6.1 --platform linux/x86_64 --load --tag wkhtmltopdf-x86_64:0.0.11 .
+$ docker tag wkhtmltopdf-x86_64:0.0.11 909798297030.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.11
+$ docker push 909798297030.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.11
+```
