@@ -1,0 +1,13 @@
+services:
+  kwkhtmltopdf:
+    build:
+      context: .
+      dockerfile: Dockerfile-0.12.6.1
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '0.1'
+    #       memory: 100M
+    platform: linux/amd64
+    ports:
+      - 8080:8080
