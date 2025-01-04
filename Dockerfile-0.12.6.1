@@ -4,8 +4,8 @@ FROM --platform=linux/amd64 docker.io/golang:1.23.3
 WORKDIR /app
 COPY go.mod .
 COPY go.sum .
-COPY server/kwkhtmltopdf_server.go .
-RUN go build kwkhtmltopdf_server.go
+COPY server/ .
+RUN go build -o app .
 
 # second stage: server with wkhtmltopdf
 
@@ -45,7 +45,7 @@ RUN wget https://github.com/google/fonts/archive/main.tar.gz -O gf.tar.gz && \
 #   rm -rf /var/cache/* && \
 #   fc-cache -f
 
-COPY --from=0 /app/kwkhtmltopdf_server /usr/local/bin/
+COPY --from=0 /app/app /usr/local/bin/
 
 RUN adduser --disabled-password --gecos '' kwkhtmltopdf
 USER kwkhtmltopdf
@@ -53,4 +53,4 @@ ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
 EXPOSE 8080
-CMD ["/usr/local/bin/kwkhtmltopdf_server"]
+CMD ["/usr/local/bin/app"]
