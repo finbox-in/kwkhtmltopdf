@@ -268,8 +268,9 @@ func parseMultipartForm(reader *multipart.Reader, tmpdir string) (args []string,
 }
 
 func runWkhtmltopdf(w http.ResponseWriter, ctx context.Context, args []string) {
+	args = append(args, "--enable-local-file-access") // https://github.com/wkhtmltopdf/wkhtmltopdf/issues/4460#issuecomment-661345113
 	args = append(args, "-")
-	log.Println("Args", anyToJSONString(args))
+	log.Println("Args", args)
 
 	log.Println("Starting wkhtmltopdf process")
 	cmd := exec.Command(wkhtmltopdfBin(), args...)
