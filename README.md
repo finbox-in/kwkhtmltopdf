@@ -36,7 +36,7 @@ cURL command -
    --form 'margin-top="20"' \
    --form 'page-size="A4"' \
    --form 'margin-bottom="10"' \
-   --output "$output"
+   --output "output.pdf"
 ```
 
 
