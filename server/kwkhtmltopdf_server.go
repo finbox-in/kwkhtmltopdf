@@ -14,56 +14,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-)
-
-var (
-	// Counter for total requests
-	requestsTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "pdf_requests_total",
-			Help: "Total number of PDF generation requests",
-		},
-		[]string{"path", "status"},
-	)
-
-	// Histogram for request duration
-	requestDuration = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "pdf_request_duration_seconds",
-			Help:    "Time taken to process PDF generation requests",
-			Buckets: []float64{.1, .5, 1, 2.5, 5, 10, 20, 30},
-		},
-		[]string{"path"},
-	)
-
-	// Gauge for current active requests
-	activeRequests = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "pdf_active_requests",
-			Help: "Number of currently active PDF generation requests",
-		},
-	)
-
-	// Counter for errors
-	errorTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "pdf_errors_total",
-			Help: "Total number of PDF generation errors",
-		},
-		[]string{"type", "error"},
-	)
-
-	// Histogram for PDF file sizes
-	pdfSize = promauto.NewHistogram(
-		prometheus.HistogramOpts{
-			Name:    "pdf_size_bytes",
-			Help:    "Size of generated PDFs in bytes",
-			Buckets: prometheus.ExponentialBuckets(1024, 2, 10), // Starting from 1KB
-		},
-	)
 )
 
 type statusRecorder struct {
@@ -76,15 +27,6 @@ func (sr *statusRecorder) WriteHeader(code int) {
 	sr.ResponseWriter.WriteHeader(code)
 }
 
-// TODO ignore opts?
-// --log-level, -q, --quiet, --read-args-from-stdin, --dump-default-toc-xsl
-// --dump-outline <file>, --allow <path>, --cache-dir <path>,
-// --disable-local-file-access, --enable-local-file-access
-
-// TODO sensitive opts to be hidden from log
-// --cookie <name> <value>, --password <password>,
-// --ssl-key-password <password>
-
 func wkhtmltopdfBin() string {
 	bin := os.Getenv("KWKHTMLTOPDF_BIN")
 	if bin != "" {
@@ -93,8 +35,10 @@ func wkhtmltopdfBin() string {
 	return "wkhtmltopdf"
 }
 
-func httpError(w http.ResponseWriter, err error, code int, logger *TraceLogger) {
-	logger.Printf("HTTP error: %v", err)
+func httpError(ctx context.Context, w http.ResponseWriter, err error, code int) {
+	logger := loggerFromContext(ctx)
+
+	logger.Errorf("HTTP error: %v", err)
 
 	if sr, ok := w.(*statusRecorder); ok {
 		sr.statusCode = code
@@ -103,8 +47,10 @@ func httpError(w http.ResponseWriter, err error, code int, logger *TraceLogger) 
 	http.Error(w, err.Error(), code)
 }
 
-func httpAbort(w http.ResponseWriter, err error, logger *TraceLogger) {
-	logger.Printf("HTTP abort: %v", err)
+func httpAbort(ctx context.Context, w http.ResponseWriter, err error) {
+	logger := loggerFromContext(ctx)
+
+	logger.Errorf("HTTP abort: %v", err)
 
 	if sr, ok := w.(*statusRecorder); ok {
 		sr.statusCode = http.StatusInternalServerError
@@ -113,19 +59,21 @@ func httpAbort(w http.ResponseWriter, err error, logger *TraceLogger) {
 	wh, ok := w.(http.Hijacker)
 	if !ok {
 		errorTotal.WithLabelValues("hijack_unsupported", err.Error()).Inc()
-		logger.Println("cannot abort connection, error not reported to client: http.Hijacker not supported")
+		logger.Errorln("cannot abort connection, error not reported to client: http.Hijacker not supported")
 		return
 	}
 	c, _, err := wh.Hijack()
 	if err != nil {
 		errorTotal.WithLabelValues("hijack_failed", err.Error()).Inc()
-		logger.Println("cannot abort connection, error not reported to client: ", err)
+		logger.Errorln("cannot abort connection, error not reported to client: ", err)
 		return
 	}
 	c.Close()
 }
 func pdfHandler(w http.ResponseWriter, r *http.Request) {
-	logger := loggerFromContext(r.Context())
+	ctx := r.Context()
+
+	logger := loggerFromContext(ctx)
 
 	if r.Method != http.MethodPost {
 		errorTotal.WithLabelValues("method_not_allowed", r.Method).Inc()
@@ -147,43 +95,44 @@ func pdfHandler(w http.ResponseWriter, r *http.Request) {
 	tmpdir, err := os.MkdirTemp("", "kwk")
 	if err != nil {
 		errorTotal.WithLabelValues("tempdir_creation_failed", err.Error()).Inc()
-		httpError(w, err, http.StatusInternalServerError, logger)
+		httpError(ctx, w, err, http.StatusInternalServerError)
 		return
 	}
 	defer os.RemoveAll(tmpdir)
 
-	logger.Printf("Temporary directory created: %s", tmpdir)
+	logger.Infof("Temporary directory created: %s", tmpdir)
 
 	reader, err := r.MultipartReader()
 	if err != nil {
 		errorTotal.WithLabelValues("multipart_reader_creation_failed", err.Error()).Inc()
-		logger.Printf("Failed to create multipart reader: %v", err)
-		httpError(w, err, http.StatusBadRequest, logger)
+		logger.Errorf("Failed to create multipart reader: %v", err)
+		httpError(ctx, w, err, http.StatusBadRequest)
 		return
 	}
 
-	args, endArgs, indexPath, err := parseMultipartForm(reader, tmpdir, logger)
+	args, endArgs, indexPath, err := parseMultipartForm(ctx, reader, tmpdir)
 	if err != nil {
 		errorTotal.WithLabelValues("parse_multipart_form_failed", err.Error()).Inc()
-		logger.Printf("Failed to parse multipart form: %v", err)
-		httpError(w, err, http.StatusBadRequest, logger)
+		logger.Errorf("Failed to parse multipart form: %v", err)
+		httpError(ctx, w, err, http.StatusBadRequest)
 		return
 	}
 
 	if indexPath == "" {
 		errorTotal.WithLabelValues("index_html_file_not_found", "").Inc()
-		logger.Println("index.html file is required but not found")
-		httpError(w, errors.New("index.html file is required"), http.StatusBadRequest, logger)
+		logger.Errorln("index.html file is required but not found")
+		httpError(ctx, w, errors.New("index.html file is required"), http.StatusBadRequest)
 		return
 	}
 
 	endArgs = append(endArgs, indexPath)
 	args = append(args, endArgs...)
 
-	runWkhtmltopdf(rec, r.Context(), args, logger)
+	runWkhtmltopdf(ctx, rec, args)
 }
 
-func parseMultipartForm(reader *multipart.Reader, tmpdir string, logger *TraceLogger) (args []string, endArgs []string, indexPath string, err error) {
+func parseMultipartForm(ctx context.Context, reader *multipart.Reader, tmpdir string) (args []string, endArgs []string, indexPath string, err error) {
+	logger := loggerFromContext(ctx)
 
 	defer func() {
 		// Track errors
@@ -198,6 +147,7 @@ func parseMultipartForm(reader *multipart.Reader, tmpdir string, logger *TraceLo
 			break
 		}
 		if err != nil {
+			logger.Errorln(err)
 			return nil, nil, "", err
 		}
 
@@ -205,11 +155,13 @@ func parseMultipartForm(reader *multipart.Reader, tmpdir string, logger *TraceLo
 			path := filepath.Join(tmpdir, filepath.Base(part.FileName()))
 			file, err := os.Create(path)
 			if err != nil {
+				logger.Errorln(err)
 				return nil, nil, "", err
 			}
 			_, err = io.Copy(file, part)
 			file.Close()
 			if err != nil {
+				logger.Errorln(err)
 				return nil, nil, "", err
 			}
 
@@ -236,17 +188,19 @@ func parseMultipartForm(reader *multipart.Reader, tmpdir string, logger *TraceLo
 	return args, endArgs, indexPath, nil
 }
 
-func runWkhtmltopdf(w http.ResponseWriter, ctx context.Context, args []string, logger *TraceLogger) {
+func runWkhtmltopdf(ctx context.Context, w http.ResponseWriter, args []string) {
+	logger := loggerFromContext(ctx)
+
 	args = append(args, "--enable-local-file-access") // https://github.com/wkhtmltopdf/wkhtmltopdf/issues/4460#issuecomment-661345113
 	args = append(args, "-")
-	logger.Println("Args", args)
+	logger.Infoln("Args", args)
 
-	logger.Println("Starting wkhtmltopdf process")
+	logger.Infoln("Starting wkhtmltopdf process")
 	cmd := exec.Command(wkhtmltopdfBin(), args...)
 	cmdStdout, err := cmd.StdoutPipe()
 	if err != nil {
 		errorTotal.WithLabelValues("stdout_pipe_failed", err.Error()).Inc()
-		httpError(w, err, http.StatusInternalServerError, logger)
+		httpError(ctx, w, err, http.StatusInternalServerError)
 		return
 	}
 	cmd.Stderr = os.Stderr
@@ -255,11 +209,11 @@ func runWkhtmltopdf(w http.ResponseWriter, ctx context.Context, args []string, l
 	err = cmd.Start()
 	if err != nil {
 		errorTotal.WithLabelValues("process_start_failed", err.Error()).Inc()
-		httpError(w, err, http.StatusInternalServerError, logger)
+		httpError(ctx, w, err, http.StatusInternalServerError)
 		return
 	}
 
-	logger.Println("wkhtmltopdf process started")
+	logger.Infoln("wkhtmltopdf process started")
 
 	// Buffer the output
 	var pdfBuffer bytes.Buffer
@@ -268,7 +222,7 @@ func runWkhtmltopdf(w http.ResponseWriter, ctx context.Context, args []string, l
 		_, err := io.Copy(&pdfBuffer, cmdStdout)
 		if err != nil {
 			errorTotal.WithLabelValues("copy_output_failed", err.Error()).Inc()
-			logger.Printf("Error copying command output: %v", err)
+			logger.Errorf("Error copying command output: %v", err)
 			done <- err
 			return
 		}
@@ -280,17 +234,17 @@ func runWkhtmltopdf(w http.ResponseWriter, ctx context.Context, args []string, l
 		if ctx.Err() != nil {
 			errorTotal.WithLabelValues("context_cancelled", ctx.Err().Error()).Inc()
 		}
-		logger.Println("Context cancelled, killing wkhtmltopdf process")
+		logger.Errorln("Context cancelled, killing wkhtmltopdf process")
 		if err := cmd.Process.Kill(); err != nil {
-			logger.Printf("Failed to kill process: %v", err)
+			logger.Errorf("Failed to kill process: %v", err)
 		}
-		httpError(w, ctx.Err(), http.StatusRequestTimeout, logger)
+		httpError(ctx, w, ctx.Err(), http.StatusRequestTimeout)
 		return
 	case err := <-done:
 		if err != nil {
-			logger.Printf("wkhtmltopdf process failed: %v", err)
+			logger.Errorf("wkhtmltopdf process failed: %v", err)
 			errorTotal.WithLabelValues("process_failed", err.Error()).Inc()
-			httpError(w, err, http.StatusInternalServerError, logger)
+			httpError(ctx, w, err, http.StatusInternalServerError)
 			return
 		}
 	}
@@ -300,15 +254,15 @@ func runWkhtmltopdf(w http.ResponseWriter, ctx context.Context, args []string, l
 	// Write the PDF to the client
 	_, err = w.Write(pdfBuffer.Bytes())
 	if err != nil {
-		logger.Printf("Failed to write PDF to response: %v", err)
-		httpAbort(w, err, logger)
+		logger.Errorf("Failed to write PDF to response: %v", err)
+		httpAbort(ctx, w, err)
 		return
 	}
 
 	// Log and track the size of the generated PDF
-	logger.Printf("Generated PDF size: %d bytes", pdfBuffer.Len())
+	logger.Infof("Generated PDF size: %d bytes", pdfBuffer.Len())
 	pdfSize.Observe(float64(pdfBuffer.Len()))
-	logger.Println("wkhtmltopdf process completed successfully")
+	logger.Infoln("wkhtmltopdf process completed successfully")
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {

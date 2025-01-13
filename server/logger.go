@@ -2,48 +2,74 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"net/http"
+	"os"
+
+	"github.com/sirupsen/logrus"
 )
 
-// TraceLogger wraps the standard logger with trace ID context
-type TraceLogger struct {
-	traceID string
+type logger struct {
+	*logrus.Entry
 }
 
-func (t *TraceLogger) Printf(format string, v ...interface{}) {
-	log.Printf("[TraceID: %s] %s", t.traceID, fmt.Sprintf(format, v...))
+var (
+	GlobalLogger *logger
+)
+
+type loggerContextKeyType string
+
+const loggerContextKey loggerContextKeyType = "logger"
+
+func init() {
+	Log := logrus.New()
+	Log.SetReportCaller(true)
+	Log.SetOutput(os.Stdout)
+	Log.SetFormatter(&logrus.JSONFormatter{})
+	Log.SetLevel(logrus.DebugLevel)
+
+	GlobalLogger = &logger{
+		Entry: logrus.NewEntry(Log),
+	}
 }
 
-func (t *TraceLogger) Println(v ...interface{}) {
-	args := append([]interface{}{fmt.Sprintf("[TraceID: %s]", t.traceID)}, v...)
-	log.Println(args...)
-}
-
-// Context key for trace ID
-type contextKey string
-
-const traceIDKey contextKey = "traceID"
-
-// Middleware to extract trace ID and add it to context
+// Middleware to extract trace ID and attach a logger with traceID to context
 func withTraceID(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		logger := loggerFromContext(r.Context())
+
 		traceID := r.Header.Get("X-Trace-ID")
-		if traceID == "" {
-			traceID = "unknown"
+
+		// Create a new entry with the fields and assign it back to the logger
+		loggerWithFields := logger.WithFields(logrus.Fields{
+			"trace-id": traceID,
+		})
+
+		if traceID != "" {
+			// Only assign a new entry if traceID is present
+			logger.Entry = loggerWithFields
 		}
 
-		logger := &TraceLogger{traceID: traceID}
-		ctx := context.WithValue(r.Context(), traceIDKey, logger)
+		ctx := context.WithValue(r.Context(), loggerContextKey, logger)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
 
+func newLogger() *logger {
+	newLogger := *GlobalLogger
+	return &newLogger
+}
+
 // Helper to get logger from context
-func loggerFromContext(ctx context.Context) *TraceLogger {
-	if logger, ok := ctx.Value(traceIDKey).(*TraceLogger); ok {
+func loggerFromContext(ctx context.Context) *logger {
+	if logger, ok := ctx.Value(loggerContextKey).(*logger); ok {
 		return logger
 	}
-	return &TraceLogger{traceID: "unknown"}
+	return newLogger()
+}
+
+// TODO: Remove
+func (logger *logger) WithX(key string, value interface{}) *logger {
+	logger.Entry = logger.WithField(key, value)
+	return logger
 }
