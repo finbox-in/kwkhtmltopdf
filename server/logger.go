@@ -16,7 +16,10 @@ var (
 	GlobalLogger *Logger
 )
 
-const LoggerContextKey = "logger"
+// Define a custom type for the context key
+type contextKey string
+
+const LoggerContextKey = contextKey("logger")
 
 func NewProductionLogger() *Logger {
 	Log := logrus.New()

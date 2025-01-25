@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -275,6 +274,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	log := NewProductionLogger()
 	router := http.NewServeMux()
 	router.HandleFunc("/status", withTraceID(statusHandler))
 	router.HandleFunc("/pdf", withTraceID(pdfHandler))
