@@ -1,0 +1,19 @@
+namespace: lending
+replicaCount: 1
+revisionHistoryLimit: 5
+
+image:
+  wkhtmltopdf: 909798297030.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.14
+
+resources:
+  wkhtmltopdf:
+    limits:
+      cpu: 2
+      memory: 4Gi
+    requests:
+      cpu: 1
+      memory: 2Gi
+
+service:
+  type: NodePort
+  wkhtmltopdfPort: 8080

@@ -1,6 +1,6 @@
 # kwkhtmltopdf
 
-A [wkhtmlpdf](https://wkhtmltopdf.org) server with drop-in client.
+A [wkhtmlpdf](https://wkhtmltopdf.org) server.
 
 Why?
 
@@ -24,29 +24,28 @@ to convert as multipart form data.
 
 It is written in go.
 
-## kwkhtmltopdf_client
+## Usage
 
-A drop-in replacement for [wkhtmlpdf](https://wkhtmltopdf.org) which invokes
-the above server defined in the `KWKHTMLTOPDF_SERVER_URL` environment variable.
+cURL command - 
+```curl
+  curl --location 'http://localhost:8081/pdf' \
+   --header 'X-Trace-ID: 123' \
+   --form 'file=@"/Users/kshitizagrawal/Desktop/repositories/docker-wkhtmltopdf-aas/assets/header.html"' \
+   --form 'file=@"/Users/kshitizagrawal/Desktop/repositories/docker-wkhtmltopdf-aas/assets/index.html"' \
+   --form 'file=@"/Users/kshitizagrawal/Desktop/repositories/docker-wkhtmltopdf-aas/assets/footer.html"' \
+   --form 'margin-top="20"' \
+   --form 'page-size="A4"' \
+   --form 'margin-bottom="10"' \
+   --output "output.pdf"
+```
 
-There are two clients:
-
-* a go client (preferred)
-* a python client, which only depends on the `requests` library.
-  It should work with any python version supported by `requests`.
 
 ## Quick start
 
 ### Run the server
 
 ```
-$ docker run --rm -p 8080:8080 ghcr.io/acsone/kwkhtmltopdf:0.12.6.1-latest
-```
-
-or
-
-```
-$ go run server/kwkhtmltopdf_server.go
+$ docker compose up
 ```
 
 The server should now listen on http://localhost:8080.
@@ -57,54 +56,21 @@ The docker image is built for amd64. If you are on Apple Silicon,
 you can use it by disabling the `Use Rosetta for x86_64/amd64 emulation on Apple Silicon` option
 in the Docker Desktop general settings first.
 
-### Run the client
-
-Any of the following should generate a printout of the wkhtmltopdf home page to /tmp/test.pdf.
-
-#### Using the built binary
-
-```
-$ go build -o client/go/kwkhtmltopdf_client client/go/kwkhtmltopdf_client.go
-$ env KWKHTMLTOPDF_SERVER_URL=http://localhost:8080 \
-    client/go/kwkhtmltopdf_client https://wkhtmltopdf.org /tmp/test.pdf
-```
-
-#### Using the Go client
-
-```
-$ env KWKHTMLTOPDF_SERVER_URL=http://localhost:8080 \
-    go run client/go/kwkhtmltopdf_client.go https://wkhtmltopdf.org /tmp/test.pdf
-```
-
-#### Using the Python client
-
-```
-$ env KWKHTMLTOPDF_SERVER_URL=http://localhost:8080 \
-    client/python/kwkhtmltopdf_client.py https://wkhtmltopdf.org /tmp/test.pdf
-```
-
-## Run tests
-
-1. Start the server.
-2. Set and export `KWKHTMLTOPDF_SERVER_URL` environment variable.
-3. Run `tox`.
-
-This will run the same tests against the the native wkhtmltopdf executable,
-as well as against the server using the python and go clients.
-
-## Roadmap
-
-See [issues on GitHub](<https://github.com/acsone/kwkhtmltopdf/issues>)
-as well as some TODO's in the source code.
-
 ## Releasing
 
-Push the master branch and ensure tests pass on GitHub.
+### Login to ECR
 
-Build the go client and server as explained above. Create and tag a release on GitHub
-and attach the client and server you just built to it.
+```sh
+$ aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 909798297030.dkr.ecr.ap-south-1.amazonaws.com
+```
 
-Images are built and pushed to ghcr.io by a GitHub action.
+### Build and push to ECR
+
+```sh
+$ docker buildx build -f Dockerfile-0.12.6.1 --platform linux/x86_64 --load --tag wkhtmltopdf-x86_64:0.0.17 .
+$ docker tag wkhtmltopdf-x86_64:0.0.17 909798297030.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.17
+$ docker push 909798297030.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.17
+```
 
 ## Credits
 

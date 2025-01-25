@@ -1,0 +1,4 @@
+apiVersion: v2
+name: wkhtmltopdf
+description: A Helm chart for wkhtmltopdf PDF generation service
+version: 0.1.0
