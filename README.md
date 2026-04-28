@@ -48,7 +48,7 @@ cURL command -
 $ docker compose up
 ```
 
-The server should now listen on http://localhost:8080.
+With the default **`docker-compose.yml`** mapping, the service is at **`http://localhost:8080`** on the host (**`8080:8080`**). Change the **`ports`** entry in **`docker-compose.yml`** if you need another host port.
 
 #### Note for Apple Silicon users
 
@@ -72,7 +72,7 @@ Prometheus metrics for this route use the **`image_*`** names (`image_requests_t
 Example:
 
 ```bash
-curl --location 'http://localhost:18080/image' \
+curl --location 'http://localhost:8080/image' \
   --header 'X-Trace-ID: 123' \
   --form 'file=@index.html;filename=index.html' \
   --form 'format=png' \
@@ -80,7 +80,15 @@ curl --location 'http://localhost:18080/image' \
   --output out.png
 ```
 
-Local sample (read HTML from disk, call **`POST /image`**, save **`samples/hello-image-output.png`**): see **`samples/README.md`** and run **`go run ./cmd/htmltoimagesample`** while **`docker compose up`** is running.
+Local sample (with **`docker compose up`**): **`curl`** **`POST /image`** using **`samples/hello-image.html`** as **`index.html`** and write a PNG, for example:
+
+```bash
+curl -sS -X POST 'http://127.0.0.1:8080/image' \
+  -H 'X-Trace-ID: local-sample' \
+  -F "file=@$(pwd)/samples/hello-image.html;filename=index.html" \
+  -F 'format=png' -F 'width=800' \
+  -o "$(pwd)/samples/hello-image-output.png"
+```
 
 Tests:
 
@@ -88,10 +96,12 @@ Tests:
 go test ./... -count=1 -race
 ```
 
-Optional integration test (real `wkhtmltoimage` on `PATH`):
+**`POST /image`:** `server/wkhtmltoimage_test.go` runs **`TestImageHandler_*`** with a fake **`wkhtmltoimage`** script (writes a minimal PNG to the output path). No real **`wkhtmltoimage`** install is required on CI. **GitHub Actions** (`.github/workflows/test.yml`) runs **`go test ./... -count=1 -race`** on every matrix job before **`tox`**.
+
+Optional integration test (real **`wkhtmltoimage`** on **`PATH`**, **`samples/hello-image.html`** present):
 
 ```bash
-WKHTMLTOIMAGE_INTEGRATION=1 go test ./server/... -run TestWkhtmltoimage_integrationRealBinary -v
+WKHTMLTOIMAGE_INTEGRATION=1 go test ./server/... -run TestImageHandler_integrationRealBinary -v
 ```
 
 ## Releasing

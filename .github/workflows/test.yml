@@ -17,6 +17,12 @@ jobs:
           - "0.12.6.1"
     steps:
       - uses: actions/checkout@v2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Go tests (server, including POST /image)
+        run: go test ./... -count=1 -race
       - name: Install dependencies
         run: |
           pip install tox
