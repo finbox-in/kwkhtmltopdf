@@ -69,15 +69,36 @@ The server also exposes **`POST /image`** for HTML → raster image using
 
 Prometheus metrics for this route use the **`image_*`** names (`image_requests_total`, `image_request_duration_seconds`, `image_active_requests`, `image_errors_total`, `image_size_bytes`).
 
-Example:
+file (required) — Multipart file part; filename basename must be index.html. That upload is the main HTML wkhtmltoimage renders. Example: file=@./anything.html;filename=index.html.
+
+file (optional, extra) — More file parts with other basenames (e.g. logo.png, style.css) are saved beside index.html so relative URLs in HTML can load them.
+
+format (optional) — Image format; if you omit it, the server defaults to png. Typical values: png, jpg, jpeg, bmp, svg (depends on your wkhtmltoimage build).
+
+width (optional) — Viewport width in pixels (e.g. 1024).
+
+height (optional) — Height in pixels (cropping / viewport height, depending on wkhtmltoimage).
+
+quality (optional) — image quality 0..100 , Default: 94.
+
+zoom(optional) — render scale (1.0 normal, 2.0 bigger, 0.8 smaller). Default: 1.0.
+
+Any other form field (optional) — Becomes a wkhtmltoimage CLI flag: -- plus the value if the value is non-empty; empty value means a boolean-style -- only.
+
+X-Trace-ID (optional, HTTP header) — Correlates this request in logs; not a multipart field.
+
+Recommended curl (using the parameters above):
 
 ```bash
-curl --location 'http://localhost:8080/image' \
-  --header 'X-Trace-ID: 123' \
-  --form 'file=@index.html;filename=index.html' \
+curl --location 'https://dev-cluster.finbox.in/wkhtmltopdf/image' \
+  --header 'X-Trace-ID: image-render-001' \
+  --form 'file=@"/Users/nagar/Desktop/sample/index.html";filename=index.html' \
   --form 'format=png' \
-  --form 'width=1024' \
-  --output out.png
+  --form 'width=1200' \
+  --form 'height=900' \
+  --form 'quality=40' \
+  --form 'zoom=1.0' \
+  --output 'out.png'
 ```
 
 Local sample (with **`docker compose up`**): **`curl`** **`POST /image`** using **`samples/hello-image.html`** as **`index.html`** and write a PNG, for example:
