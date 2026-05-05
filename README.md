@@ -125,7 +125,9 @@ Optional integration test (real **`wkhtmltoimage`** on **`PATH`**, **`samples/he
 WKHTMLTOIMAGE_INTEGRATION=1 go test ./server/... -run TestImageHandler_integrationRealBinary -v
 ```
 
-## Releasing
+# Releasing
+
+## Non Prod
 
 ### Login to ECR
 
@@ -139,6 +141,23 @@ $ aws ecr get-login-password --region ap-south-1 | docker login --username AWS -
 $ docker buildx build -f Dockerfile-0.12.6.1 --platform linux/x86_64 --load --tag wkhtmltopdf-x86_64:0.0.17 .
 $ docker tag wkhtmltopdf-x86_64:0.0.17 909798297030.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.17
 $ docker push 909798297030.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.17
+```
+
+
+## Prod
+
+### Login to ECR
+
+```sh
+$ aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 558763752963.dkr.ecr.ap-south-1.amazonaws.com
+```
+
+### Build and push to ECR
+
+```sh
+$ docker buildx build -f Dockerfile-0.12.6.1 --platform linux/x86_64 --load --tag wkhtmltopdf-x86_64:0.0.17 .
+$ docker tag wkhtmltopdf-x86_64:0.0.17 558763752963.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.17
+$ docker push 558763752963.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.17
 ```
 
 ## Credits
