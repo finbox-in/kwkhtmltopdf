@@ -3,7 +3,7 @@ replicaCount: 2
 revisionHistoryLimit: 5
 
 image:
-  wkhtmltopdf: TODO
+  wkhtmltopdf: 558763752963.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf:0.0.18
 
 resources:
   wkhtmltopdf:

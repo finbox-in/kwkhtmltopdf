@@ -3,7 +3,7 @@ replicaCount: 1
 revisionHistoryLimit: 5
 
 image:
-  wkhtmltopdf: 909798297030.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.14
+  wkhtmltopdf: 951122091923.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.18
 
 resources:
   wkhtmltopdf:
