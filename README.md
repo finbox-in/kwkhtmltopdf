@@ -132,15 +132,15 @@ WKHTMLTOIMAGE_INTEGRATION=1 go test ./server/... -run TestImageHandler_integrati
 ### Login to ECR
 
 ```sh
-$ aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 909798297030.dkr.ecr.ap-south-1.amazonaws.com
+$ aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 951122091923.dkr.ecr.ap-south-1.amazonaws.com
 ```
 
 ### Build and push to ECR
 
 ```sh
 $ docker buildx build -f Dockerfile-0.12.6.1 --platform linux/x86_64 --load --tag wkhtmltopdf-x86_64:0.0.18 .
-$ docker tag wkhtmltopdf-x86_64:0.0.18 909798297030.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.18
-$ docker push 909798297030.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.18
+$ docker tag wkhtmltopdf-x86_64:0.0.18 951122091923.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.18
+$ docker push 951122091923.dkr.ecr.ap-south-1.amazonaws.com/wkhtmltopdf-x86_64:0.0.18
 ```
 
 
