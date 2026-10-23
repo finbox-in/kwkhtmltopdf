@@ -1,6 +1,6 @@
 # first stage: build kwkhtmltopdf_server
 
-FROM --platform=linux/amd64 docker.io/golang:1.23.3
+FROM --platform=linux/amd64 docker.io/golang:1.26.10
 WORKDIR /app
 COPY go.mod .
 COPY go.sum .
